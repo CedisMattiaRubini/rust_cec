@@ -5,7 +5,7 @@ use crate::communication;
 use communication::synchronous::{receive, send};
 
 /// Recieve new settings or give back the one used right now
-pub fn settings_handler(mut stream: TcpStream, json: serde_json::Value, settings: Settings) {
+pub fn settings_handler(stream: TcpStream, json: serde_json::Value, settings: Settings) {
     if let serde_json::Value::String(conn_type) = &json["command"]{
         match conn_type.as_str() {
             "get" => send_settings(stream, settings),

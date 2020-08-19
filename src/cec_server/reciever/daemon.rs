@@ -7,8 +7,7 @@ use std::process::Command;
 
 use crate::log;
 use crate::settings::Settings;
-
-use super::responcesgroups;
+use super::traffic::Traffic;
 
 #[derive(PartialEq)]
 enum CodeCEC {
@@ -24,8 +23,10 @@ enum CodeCEC {
 /// This list is behind a lock
 /// In order to not stop the reading operation of the stdout with each time there is a time to wait to get the lock, a separeta process (the feeder) takes care of that
 pub fn launch(out_pipe: Arc<Mutex<Vec<mpsc::Sender<String>>>>, in_sender: mpsc::Sender<String>, cec_stdout: process::ChildStdout, mut log_setup: log::LogSetup, settings: Settings) {
+    let reboot_flag = settings.can_reboot();
     let (sender, reciver) = mpsc::channel::<String>();
     let log_setup_clone = log_setup.clone();
+    let mut traffic = Traffic::new(Some(settings), in_sender);
     thread::spawn(|| {
         send_out(out_pipe, reciver, log_setup_clone);
     });
@@ -47,7 +48,7 @@ pub fn launch(out_pipe: Arc<Mutex<Vec<mpsc::Sender<String>>>>, in_sender: mpsc::
                     log_setup.try_log(format!("Error while sending '{}'\n error {}", readed, e));
                 };
                 // Getting the actual traffic code, if its contained
-                let wrapped_cec_code = get_cec_code(&readed, settings.clone());
+                let wrapped_cec_code = get_cec_code(&readed, reboot_flag);
                 if wrapped_cec_code != CodeCEC::None {
                     let cec_code = match wrapped_cec_code {
                         CodeCEC::In(code) => code,
@@ -56,26 +57,8 @@ pub fn launch(out_pipe: Arc<Mutex<Vec<mpsc::Sender<String>>>>, in_sender: mpsc::
                     };
                     println!("-{}-", cec_code);
                     // get the response to the code
-                    if let Some(responses) = get_response(&cec_code, settings.clone()){
-                        println!("Has {} responces", responses.responces.0.len());
-                        // If there are any response execute them 
-                        for r in responses.responces.0 {
-                            // Doing individual dealy
-                            // Response delay > GroupResponces delay_each
-                            if let Some(delay) = r.delay{
-                                thread::sleep(delay);
-                            } else if let Some(delay) = responses.delay_each{
-                                thread::sleep(delay);
-                            }
-                            // Sending single code
-                            if let Err(e) = in_sender.send(r.cmd) {
-                                log_setup.try_log(format!("Problem sending response to code {}, erro: {}", readed, e));
-                            };
-                        }
-                        // Delay after 
-                        if let Some(delay) = responses.delay_finish{
-                            thread::sleep(delay);
-                        }
+                    if let Err(e) = traffic.respond(&cec_code){
+                        log_setup.try_log(format!("Could not responde to {}, error: {}", &cec_code, e));
                     };
                 };
             },
@@ -108,13 +91,11 @@ fn send_out(out_pipe: Arc<Mutex<Vec<mpsc::Sender<String>>>>, reciever: mpsc::Rec
     };
 }
 
-/// Filter the daemon output and extract the CEC code
-fn get_cec_code(readed: &String, settings: Settings) -> CodeCEC {
+/// Filter the daemon output string and extract the CEC code
+fn get_cec_code(readed: &String, reboot_flag: bool) -> CodeCEC {
     // If there was a problem with the cec daemon, reboot the pi
-    if readed.contains("ERROR"){
-        if settings.can_reboot() {
-            reboot();
-        };
+    if readed.contains("ERROR") && reboot_flag == true {
+        reboot();
     };
     // It has to contain the TRAFFIC word at the beginning
     if readed.contains("TRAFFIC"){
@@ -139,28 +120,6 @@ fn get_cec_code(readed: &String, settings: Settings) -> CodeCEC {
     } else {
         CodeCEC::None
     }
-}
-
-/// Read output and respond with a code if it need be
-fn get_response(output: &String, settings: Settings) -> Option<responcesgroups::ResponseGroup> {
-    // Checking if there is any configuration in the json file
-    if let Some((responces, triggers)) = settings.retrieve_responces() {
-        // Checking if the readed code is compatible with any trigger
-        for t in triggers {
-            // if compatible check the response
-            if t.trigger == *output {
-                // Finding the response of the trigger
-                for r in responces {
-                    // Sending the response
-                    if r.id == t.response_id {
-                        return Some(r)
-                    };
-                };
-                return None
-            };
-        };
-    } 
-    return None
 }
 
 /// Sometimes cec-daemon doesn't work and the raspberry pi has to be rebooted

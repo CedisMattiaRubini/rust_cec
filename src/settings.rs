@@ -70,7 +70,7 @@ impl Settings {
         let json: serde_json::value::Value = match serde_json::from_str::<serde_json::value::Value>(js_settings_string.as_str()){
             Ok(json_str) => json_str,
             // TODO:
-            Err(e) => return None,
+            Err(_e) => return None,
         };
         Some(json)
     }

@@ -1,5 +1,7 @@
 use serde::{Serialize, Deserialize};
 
+use super::jsonparser;
+
 /// Trigger to respond to when recieving a command
 #[derive(Deserialize, Serialize, Debug)]
 pub struct Trigger {
@@ -19,11 +21,11 @@ impl Trigger {
     /// Convert a json in a Trigger
     pub fn from_json(json: &serde_json::Value) -> super::Result<Trigger> {
         if json["trigger"].is_string() && json["response_id"].is_string(){
-            let trigger = match super::get_json_string(&json, &"trigger"){
+            let trigger = match jsonparser::get_json_string(&json, &"trigger"){
                 Some(trigger) => trigger,
                 None => return Err(super::ServerError::InvalidJson),
             };
-            let response_id = match super::get_json_string(&json, &"response_id"){
+            let response_id = match jsonparser::get_json_string(&json, &"response_id"){
                 Some(response_id) => response_id,
                 None => return Err(super::ServerError::InvalidJson),
             };
@@ -34,6 +36,14 @@ impl Trigger {
         } else {
             Err(super::ServerError::InvalidJson)
         }
+    }
+
+    /// Recieve data, checks if its launch the trigger
+    pub(super) fn has_trigger(&self, data: &String) -> Option<&String> {
+        if data.eq(&self.trigger){
+            return Some(&self.response_id)
+        }
+        None
     }
 
 }

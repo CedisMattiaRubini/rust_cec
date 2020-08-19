@@ -39,7 +39,7 @@ pub fn tcp_handler(ip: IpAddr, port: u16, sender: mpsc::Sender<String>, reciever
                 let rjson = receive::receive_json(&mut stream);
                 match rjson {
                     // TODO:
-                    Err(e) => println!("wrong json"),
+                    Err(_e) => println!("wrong json"),
                     Ok(json) => {
                         // Checking if the json has the request field and it's a string
                         if let serde_json::Value::String(conn_type) = &json["request"]{

@@ -1,17 +1,20 @@
-use std::time;
-
 use serde::{Serialize, Deserialize};
 
-use super::responces::Response;
+use std::time;
+use std::thread;
 
-#[derive(Deserialize, Serialize, Debug)]
-pub struct ResponseList (pub Vec<Response>);
+use super::responces::Response;
+use super::jsonparser;
 
 #[derive(Deserialize, Serialize, Debug)]
 pub struct ResponseGroup {
+    /// Identifier
     pub(super) id: String,
-    pub(super) responces: ResponseList,
+    /// Responses
+    pub(super) responces: Vec<Response>,
+    /// Delay before
     pub(super) delay_each: Option<time::Duration>,
+    /// Delay after
     pub(super) delay_finish: Option<time::Duration>,
 }
 
@@ -30,20 +33,43 @@ impl ResponseGroup {
                     };
                 };
             };
-            let id = match super::get_json_string(&json, &"id"){
+            let id = match jsonparser::get_json_string(&json, &"id"){
                 Some(id) => id,
                 None => return Err(super::ServerError::InvalidJson),
             };
             Ok(ResponseGroup {
                 id: id,
-                responces: ResponseList(response_vec),
-                delay_each: super::json_duration(&json["delay_each"]),
-                delay_finish: super::json_duration(&json["delay_finish"]),
+                responces: response_vec,
+                delay_each: jsonparser::json_duration(&json["delay_each"]),
+                delay_finish: jsonparser::json_duration(&json["delay_finish"]),
             })
         } else {
             println!("Error 1");
             Err(super::ServerError::InvalidJson)
         }
+    }
+
+    /// Return true if the id are equals
+    pub fn eq_id(&self, id: &String) -> bool{
+        self.id.eq(id)
+    }
+
+    /// Execute the group delauy
+    pub fn delay(&self) -> bool {
+        if let Some(delay) = self.delay_each {
+            thread::sleep(delay);
+            return true
+        };
+        false
+    }
+
+    /// Execute the group final delay
+    pub fn final_delay(&self) -> bool {
+        if let Some(delay) = self.delay_finish {
+            thread::sleep(delay);
+            return true
+        };
+        false
     }
 
 }
@@ -58,16 +84,21 @@ impl std::fmt::Display for ResponseGroup {
             Some(delay) => delay.as_secs(),
             None => 0,
         };
-        write!(f, "trigger: {}, delay_ech: {}, delay_finish: {}, responces: {}", self.id, delay_each, delay_finish, self.responces)
+        let mut print_string: String = String::new();
+        for r in &self.responces{
+            print_string = format!("{}, {}", print_string, r);
+        };
+        write!(f, "trigger: {}, delay_ech: {}, delay_finish: {}, responces: {}", self.id, delay_each, delay_finish, print_string)
     }
 }
 
-impl std::fmt::Display for ResponseList {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut print_string: String = String::new();
-        for r in &self.0{
-            print_string = format!("{}, {}", print_string, r);
-        }
-        write!(f, "{}", print_string)
+impl <'a> IntoIterator for & 'a ResponseGroup {
+
+    type Item = <std::slice::Iter<'a, Response> as Iterator>::Item;
+    type IntoIter = std::slice::Iter<'a, Response>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.responces.as_slice().into_iter()
     }
+
 }
