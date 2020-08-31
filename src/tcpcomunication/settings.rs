@@ -1,3 +1,5 @@
+use serde_json::json;
+
 use std::net::TcpStream;
 
 use crate::settings::Settings;
@@ -31,10 +33,21 @@ fn send_settings(mut stream: TcpStream, settings: Settings) {
     };
 }
 
-// Get new settings from the stream and 
+// Get new settings from the stream and return the new saved settings
 fn recieve_settings(mut stream: TcpStream, settings: Settings) {
     if let Ok(json) = receive::receive_json(&mut stream){
         settings.save_settings(json);
+        let readed_settings = settings.retrieve_responces();
+        // Get new settings and return to sender
+        let json_response = match readed_settings {
+            //
+            Some(s) => s,
+            // Send empty json
+            None => json!({}),
+        };
+        // Sending back new settings
+        // TODO:
+        send::send_json(&mut stream, &json_response);
     } else {
         // TODO:
         println!("Unable to receive settings json");

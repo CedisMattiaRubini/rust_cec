@@ -10,7 +10,7 @@ enum Request {
     None
 }
 
-/// Dealing with incoming tcp connection
+/// Deling with incoming tcp connection
 pub fn tcp_handler(ip: IpAddr, port: u16, sender: mpsc::Sender<String>, reciever: Arc<Mutex<Vec<mpsc::Sender<String>>>>, settings: Settings) -> std::io::Result<()>{
     let socket = SocketAddr::new(ip, port);
     let listener = TcpListener::bind(socket)?;
@@ -54,7 +54,7 @@ pub fn tcp_handler(ip: IpAddr, port: u16, sender: mpsc::Sender<String>, reciever
                             match request{
                                 Request::Outuput(sender) => {
                                     std::thread::spawn(move || {
-                                        super::output::output_handler(stream, sender, new_reciever);
+                                        super::cec_traffic::output_handler(stream, sender, new_reciever);
                                     });
                                 },  
                                 Request::Settings => {
